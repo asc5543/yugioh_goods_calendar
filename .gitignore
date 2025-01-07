@@ -1,0 +1,11 @@
+
+__pycache__/config.cpython-312.pyc
+raw_data
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+.idea/yugioh_goods_calendar.iml
+.idea/inspectionProfiles/profiles_settings.xml
+config/__pycache__/config.cpython-312.pyc
+lib/__pycache__/google_calendar_handler.cpython-312.pyc
+lib/__pycache__/yugioh_good.cpython-312.pyc

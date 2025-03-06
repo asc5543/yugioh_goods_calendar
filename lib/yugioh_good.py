@@ -35,3 +35,6 @@ class YugiohGoods:
 
   def set_good_description(self, description: str):
     self.good_description = description
+
+  def set_card_list_url(self, url: str):
+    self.card_list_url = url

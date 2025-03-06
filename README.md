@@ -2,8 +2,8 @@
 
 ## What is Yugioh Goods Calendar?
 [Yugioh Goods Calendar](https://calendar.google.com/calendar/embed?src=a47600673f86110e900c56424e0c90c8e64578356255911796e624668948b058%40group.calendar.google.com&ctz=Asia%2FTokyo) is a calendar which update new goods information automatically.
-![img_list](/img/Calendar_list.png)
-![img_detail](/img/Calendar_detail.png)
+![img_list](/img/Calendar_list.jpg)
+![img_detail](/img/Calendar_detail.jpg)
 
 ## Background
 I want to see the yugioh goods information on google calendar directly
@@ -51,3 +51,6 @@ Uses google calendar API to parse existing events list.
 
 ### Create/Update calendar
 Uses google calendar API to parse existing events list.
+
+### Parse chinese card list from NTUCGM
+Uses search function by good's name, parse the url from the result.

@@ -1,3 +1,4 @@
+from bs4 import BeautifulSoup
 from config import config
 from lib import google_calendar_handler
 from lib import yugioh_good
@@ -7,6 +8,7 @@ import json, tempfile
 import os
 import re
 
+from urllib.parse import quote
 from urllib.request import urlopen
 
 # Goods Pattern
@@ -24,6 +26,24 @@ _url_pattern = re.compile(',\"url\":\"([^"]*)\"')
 # Need a method to know the good order in the same type
 # Ex. RAGE OF THE ABYSS is 1206, ANIMATION CHRONICLE 2024 is AC04
 _pack_list_per_type = {}
+
+# Get card list url from ntucgm
+def find_card_list(goods_name: str) -> str:
+  ntucgm_url = r"https://ntucgm.blogspot.com/search?q=" + quote(goods_name)
+  print(ntucgm_url)
+  search_page = urlopen(ntucgm_url)
+  content = search_page.read().decode('utf-8')
+  soup = BeautifulSoup(content, 'html.parser')
+  script_tag = soup.find('script', type='application/ld+json')
+  script_content = script_tag.string.strip()
+  match = re.search(r'"@id":\s*"([^"]+)"', script_content)
+
+  if match:
+    url = match.group(1)
+    return url
+  else:
+    print("No match found")
+    return ""
 
 def goods_parse(goods_matches: list[str]) -> list[yugioh_good.YugiohGoods]:
   """Generate Goods information from raw list."""
@@ -58,11 +78,14 @@ def good_parse(good_str: str) -> yugioh_good.YugiohGoods|None:
   url_match = _url_pattern.search(good_str)
 
   if type_match and title_match and release_date_match:
+    card_list_url = find_card_list(title_match.group(1))
     return yugioh_good.YugiohGoods(
-      title_match.group(1),
-      type_match.group(1),
-      release_date_match.group(1),
-      url_match.group(1))
+      good_name=title_match.group(1),
+      good_type=type_match.group(1),
+      good_release_date=release_date_match.group(1),
+      good_url=url_match.group(1),
+      card_list_url=card_list_url,
+    )
   else:
     return None
 
@@ -147,15 +170,12 @@ def main():
         good_order = _pack_list_per_type[key].index(good.good_name) + 1
         good.set_short_name(key, good_order)
 
+      description = f'商品類型：{good.good_type}\n發行日期：{good.good_release_date}'
+      if good.card_list_url:
+        description += f'\n卡片列表：{good.card_list_url}'
       if good.good_url and '#' not in good.good_url:
-        good.set_good_description(
-          (f'商品類型：{good.good_type}\n發行日期：{good.good_release_date}\n'
-           f'商品網址：{config.YGO_GOOD_INFO_URL }{good.good_url}')
-        )
-      else:
-        good.set_good_description(
-          f'商品類型：{good.good_type}\n發行日期：{good.good_release_date}'
-        )
+        description += f'\n商品網址：{config.YGO_GOOD_INFO_URL }{good.good_url}'
+      good.set_good_description(description)
       # Update only
       good_title = get_good_title(good)
       if good_title in calendar_events:

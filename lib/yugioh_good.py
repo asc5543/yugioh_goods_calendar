@@ -6,13 +6,14 @@ Author: asc5543
 class YugiohGoods:
   """The Yugioh goods with information."""
 
-  def __init__(self, good_name: str, good_type: str, good_release_date: str, good_url: str = ""):
+  def __init__(self, good_name: str, good_type: str, good_release_date: str, good_url: str = "", card_list_url: str = ""):
     self.good_name = good_name
     self.good_type = good_type
     self.good_release_date = good_release_date
     self.good_url = good_url
     self.good_description = ''
     self.good_short_name = None
+    self.card_list_url = card_list_url
 
   # TODO: Update format
   def __str__(self):

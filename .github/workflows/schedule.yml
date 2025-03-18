@@ -1,9 +1,9 @@
-name: Monthly job
+name: Schedule job
 
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: '0 0 1 * *'
+    - cron: '0 9 * * 1'
 
 jobs:
   monthly_job:

@@ -20,6 +20,10 @@ class YugiohGoods:
     return f'[{self.good_type}] {self.good_name} : {self.good_release_date}'
 
   def set_short_name(self, key: str, order: int):
+    # Handle 商品類型：基本パック12 but it should be 1301 case
+    if key == '12' and order > 8:
+      key = '13'
+      order -= 8
     if order < 10:
       if len(key) == 2:
         self.good_short_name = key + '0' + str(order)

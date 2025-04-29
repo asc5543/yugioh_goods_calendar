@@ -2,7 +2,7 @@ import time
 
 from bs4 import BeautifulSoup
 from config import config
-from lib import google_calendar_handler
+from lib import google_api_handler
 from lib import yugioh_good
 
 import datetime
@@ -124,33 +124,13 @@ def main():
     goods_matches = _goods_pattern.findall(goods_raw_data)
 
     yugioh_goods = goods_parse(goods_matches)
-    private_key_id = os.environ['PRIVATE_KEY_ID']
-    private_key = os.environ['PRIVATE_KEY'].replace('\\n','\n')
-    client_email = os.environ['CLIENT_EMAIL']
-    client_id = os.environ['CLIENT_ID']
-    client_x509_cert_url = os.environ['CLIENT_URL']
-    _config = {
-      "type": "service_account",
-      "project_id": "yugioh-goods-calendar",
-      "private_key_id": private_key_id,
-      "private_key": private_key,
-      "client_email": client_email,
-      "client_id": client_id,
-      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-      "token_uri": "https://oauth2.googleapis.com/token",
-      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-      "client_x509_cert_url": client_x509_cert_url,
-      "universe_domain": "googleapis.com",
-    }
-    tmp_file = tempfile.NamedTemporaryFile(mode="w+")
-    json.dump(_config, tmp_file)
-    tmp_file.flush()
-    service_account_file = tmp_file.name
+    service_account_file = google_api_handler.generate_account_json_file("yugioh-goods-calendar")
     calendar_id = os.environ['CALENDAR_ID']
-    calendar_handler = google_calendar_handler.GoogleCalendarHandler(
+    calendar_handler = google_api_handler.GoogleCalendarHandler(
       service_account_file,
       calendar_id,
     )
+    os.unlink(service_account_file)
     calendar_events = calendar_handler.get_all_calendar_event_summary()
 
     # Parse and create calendar events for each good
@@ -200,7 +180,6 @@ def main():
       print('') # Print empty line
   else:
     print(f'Failed to get goods data: Status code {goods_page.response.status_code}')
-
 
 if __name__ == '__main__':
     main()

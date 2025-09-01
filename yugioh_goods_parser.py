@@ -1,17 +1,17 @@
 import time
-
+import random
 from bs4 import BeautifulSoup
 from config import config
 from lib import google_api_handler
 from lib import yugioh_good
 
 import datetime
-import json, tempfile
 import os
 import re
 
+from urllib.error import HTTPError
 from urllib.parse import quote
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 
 # Goods Pattern
 # p[174]={"id":"cg1641","status":"","class-name":"構築済みデッキ","class-key":"structure","type":"ストラクチャーR",
@@ -32,23 +32,55 @@ _no_list_type = ['プロテクター']
 
 # Get card list url from ntucgm
 def find_card_list(goods_name: str) -> str:
-  time.sleep(2) # Avoid anti-crawler
-  ntucgm_url = r"https://ntucgm.blogspot.com/search?q=" + quote(goods_name)
-  search_page = urlopen(ntucgm_url)
-  content = search_page.read().decode('utf-8')
-  soup = BeautifulSoup(content, 'html.parser')
-  script_tag = soup.find('script', type='application/ld+json')
-  if not script_tag:
-    print('No card list exist!!')
-    return ""
-  script_content = script_tag.string.strip()
-  match = re.search(r'"@id":\s*"([^"]+)"', script_content)
+  # 加入 User-Agent 列表，用來模擬瀏覽器
+  user_agents = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0',
+  ]
 
-  if match:
-    url = match.group(1)
-    return url
-  else:
-    print('No match found')
+  ntucgm_url = r"https://ntucgm.blogspot.com/search?q=" + quote(goods_name)
+
+  try:
+    # 1. 加入隨機延遲，讓行為更自然
+    time.sleep(random.uniform(1, 3))
+
+    # 2. 創建帶有隨機 User-Agent 的 Request 物件
+    headers = {'User-Agent': random.choice(user_agents)}
+    req = Request(ntucgm_url, headers=headers)
+
+    # 3. 使用 Request 物件來發送請求
+    search_page = urlopen(req)
+
+    content = search_page.read().decode('utf-8')
+    soup = BeautifulSoup(content, 'html.parser')
+    script_tag = soup.find('script', type='application/ld+json')
+    if not script_tag:
+      print('No card list exist!!')
+      return ""
+    script_content = script_tag.string.strip()
+    match = re.search(r'"@id":\s*"([^"]+)"', script_content)
+
+    if match:
+      url = match.group(1)
+      return url
+    else:
+      print('No match found')
+      return ""
+
+  except HTTPError as e:
+    if e.code == 429:
+      print(f'HTTP Error 429: Too Many Requests for "{goods_name}". Retrying after a longer delay.')
+      # 如果遇到 429 錯誤，等待更久再重試
+      time.sleep(15)
+      # 遞迴呼叫自己，進行重試
+      return find_card_list(goods_name)
+    else:
+      # 如果是其他 HTTP 錯誤，例如 404，則拋出例外
+      print(f'HTTP Error {e.code} for "{goods_name}": {e.reason}')
+      return ""
+  except Exception as e:
+    print(f"Error fetching page for {goods_name}: {e}")
     return ""
 
 def goods_parse(goods_matches: list[str]) -> list[yugioh_good.YugiohGoods]:

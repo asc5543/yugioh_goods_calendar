@@ -5,3 +5,4 @@ TYPE_SHORTNAME_DICT = {
   "基本パック12": "12",
   "基本パック13": "13",
 }
+MAX_RETRY = 5

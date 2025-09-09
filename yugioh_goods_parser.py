@@ -43,8 +43,10 @@ def find_card_list(goods_name: str) -> str:
   else:
     goods_name = [goods_name]
 
+  # TODO: Refactor the retry and name find logic
   for name in goods_name:
-    print(f'Find {name} on website')
+    name = name.strip()
+    print(f'Find "{name}" on website')
     ntucgm_url = r"https://ntucgm.blogspot.com/search?q=" + quote(name)
 
     retry = 0
@@ -61,16 +63,22 @@ def find_card_list(goods_name: str) -> str:
         soup = BeautifulSoup(content, 'html.parser')
         script_tag = soup.find('script', type='application/ld+json')
         if not script_tag:
-          print('No card list exist!!')
-          return ""
+          if name == goods_name[-1].strip():
+            print('No card list exist!!')
+            return ""
+          else:
+            print('No match "{name}" found on website, try next name')
+            continue
         script_content = script_tag.string.strip()
         match = re.search(r'"@id":\s*"([^"]+)"', script_content)
 
         if match:
           url = match.group(1)
+          print(f'Card list: {url}')
           return url
         else:
-          print('No match {name} found on website, try next name')
+          print('No match found')
+          return ""
 
       except HTTPError as e:
         if e.code == 429:

@@ -38,13 +38,14 @@ def find_card_list(goods_name: str) -> str:
     'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0',
   ]
 
+  goods_name_list = [goods_name]
+
   if '-' in goods_name:
-    goods_name = goods_name.split('-')
-  else:
-    goods_name = [goods_name]
+    for good_name in goods_name.split('-'):
+      goods_name_list.append(good_name)
 
   # TODO: Refactor the retry and name find logic
-  for name in goods_name:
+  for name in goods_name_list:
     name = name.strip()
     print(f'Find "{name}" on website')
     ntucgm_url = r"https://ntucgm.blogspot.com/search?q=" + quote(name)
@@ -61,24 +62,35 @@ def find_card_list(goods_name: str) -> str:
 
         content = search_page.read().decode('utf-8')
         soup = BeautifulSoup(content, 'html.parser')
-        script_tag = soup.find('script', type='application/ld+json')
-        if not script_tag:
-          if name == goods_name[-1].strip():
+        script_tags = soup.find_all('script', type='application/ld+json')
+        if not script_tags:
+          if name == goods_name_list[-1].strip():
             print('No card list exist!!')
             return ""
           else:
-            print('No match "{name}" found on website, try next name')
+            print(f'No match "{name}" found on website, try next name')
             continue
-        script_content = script_tag.string.strip()
-        match = re.search(r'"@id":\s*"([^"]+)"', script_content)
+        for script_tag in script_tags:
+          target_title = ''
 
-        if match:
-          url = match.group(1)
-          print(f'Card list: {url}')
-          return url
-        else:
-          print('No match found')
-          return ""
+          script_content = script_tag.string.strip()
+          match_title = re.search(r'"headline":\s*"([^"]+)"', script_content)
+          if match_title:
+            target_title = match_title.group(1)
+            print(f'title: {target_title}')
+            # If more than 1 result, check the title
+            if name not in target_title and len(script_tags) > 1:
+              print(f'{name} not in the title {target_title}, try next one')
+              continue
+          match = re.search(r'"@id":\s*"([^"]+)"', script_content)
+
+          if match:
+            url = match.group(1)
+            print(f'Card list: {url}')
+            return url
+          else:
+            print('No match found')
+            return ""
 
       except HTTPError as e:
         if e.code == 429:

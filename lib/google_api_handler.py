@@ -49,25 +49,48 @@ class GoogleCalendarHandler:
   def get_all_calendar_event_summary(self) -> list[str]:
     """Get all events of the calendar."""
     calendar_events = []
+    page_token = None
     while True:
-      events_result = self.calendar_service.events().list(calendarId=self.calendar_id).execute()
+      events_result = self.calendar_service.events().list(
+        calendarId=self.calendar_id,
+        pageToken=page_token,
+      ).execute()
+
       for event in events_result['items']:
-        calendar_events.append(event['summary'])
+        if 'summary' in event:
+          calendar_events.append(event['summary'])
+
       page_token = events_result.get('nextPageToken')
       if not page_token:
-        return calendar_events
+        break
+
+    return calendar_events
 
   def get_calendar_event_by_summary(self, summary: str) -> dict:
     """Get event by summary."""
+    page_token = None
     while True:
-      events_result = self.calendar_service.events().list(calendarId=self.calendar_id).execute()
+      events_result = self.calendar_service.events().list(
+        calendarId=self.calendar_id,
+        q=summary,
+        pageToken=page_token,
+      ).execute()
+
       for event in events_result['items']:
         if event['summary'] == summary:
           return event
-      return {}
+
+      page_token = events_result.get('nextPageToken')
+      if not page_token:
+        break
+
+    return {}
 
   # Function to create a calendar event with a Yugioh good
-  def create_calendar_event(self, summary: str, description: str, good_release_date: datetime.date):
+  def create_calendar_event(self,
+                            summary: str,
+                            description: str,
+                            good_release_date: datetime.date) -> str:
     """Create a calendar event."""
     event = {
       'summary': summary,
@@ -76,20 +99,75 @@ class GoogleCalendarHandler:
       'end': {'date': good_release_date.isoformat(),},
     }
 
-    # Create the event
-    self.calendar_service.events().insert(calendarId=self.calendar_id, body=event).execute()
+    try:
+      # Create the event
+      created_event = self.calendar_service.events().insert(
+        calendarId=self.calendar_id,
+        body=event
+      ).execute()
 
-  def update_calendar_event(self, summary: str, description: str):
+      event_id = created_event.get('id')
+      print(f"Successfully created event: '{summary}' on {good_release_date} (ID: {event_id})")
+      return event_id
+
+    except Exception as e:
+      print(f"Failed to create event '{summary}': {e}")
+      return ""
+
+  def update_calendar_event(self, summary: str, description: str) -> bool:
     """Update a calendar event."""
 
     event = self.get_calendar_event_by_summary(summary)
+    if not event:
+      print(f"Cannot find the event: {summary}, cannot be updated")
+      return False
+
     if event['description'] == description:
       print('The description is the same, no need to be updated')
-      return
+      return True
     event['description'] = description
 
     # Update the event
-    self.calendar_service.events().patch(
-      calendarId=self.calendar_id,
-      eventId=event['id'],
-      body=event).execute()
+    try:
+      self.calendar_service.events().patch(
+        calendarId=self.calendar_id,
+        eventId=event['id'],
+        body=event,
+      ).execute()
+      print(f"Update the event succeed: {summary}")
+      return True
+    except Exception as e:
+      print(f"Update the event fail with: {e}")
+      return False
+
+  def delete_calendar_event(self, summary: str) -> bool:
+    """Delete a calendar event by summary."""
+    event = self.get_calendar_event_by_summary(summary)
+
+    if not event or 'id' not in event:
+      print(f"Cannot find: {summary}, delete fail.")
+      return False
+
+    try:
+      self.calendar_service.events().delete(
+        calendarId=self.calendar_id,
+        eventId=event['id']
+      ).execute()
+      print(f"Delete the event succeed: {summary}")
+      return True
+    except Exception as e:
+      print(f"Delete the event fail with: {e}")
+      return False
+
+if __name__ == '__main__':
+  service_account_file = generate_account_json_file("yugioh-goods-calendar")
+  cal_id = os.environ['CALENDAR_ID']
+  calendar_handler = GoogleCalendarHandler(
+    service_account_file,
+    cal_id,
+  )
+  date = datetime.date.today()
+  calendar_handler.create_calendar_event("test", "test", date)
+  calendar_handler.create_calendar_event("test2", "test2", date)
+  calendar_handler.update_calendar_event("test", "test123")
+  calendar_handler.delete_calendar_event("test2")

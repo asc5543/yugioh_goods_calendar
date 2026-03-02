@@ -138,15 +138,12 @@ def good_parse(good_str: str) -> yugioh_good.YugiohGoods|None:
   release_date_match = _release_date_pattern.search(good_str)
   url_match = _url_pattern.search(good_str)
 
-  if type_match and title_match and release_date_match:
-    return yugioh_good.YugiohGoods(
-      good_name=title_match.group(1),
-      good_type=type_match.group(1),
-      good_release_date=release_date_match.group(1),
-      good_url=url_match.group(1)
-    )
-  else:
-    return None
+  return yugioh_good.YugiohGoods(
+    good_name=title_match.group(1) if title_match else "",
+    good_type=type_match.group(1) if type_match else "",
+    good_release_date=release_date_match.group(1) if release_date_match else "",
+    good_url=url_match.group(1) if url_match else ""
+  )
 
 
 def get_good_title(good: yugioh_good.YugiohGoods) -> str:

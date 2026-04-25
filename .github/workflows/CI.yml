@@ -32,5 +32,6 @@ jobs:
           CLIENT_EMAIL: ${{ secrets.CLIENT_EMAIL }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
           CLIENT_URL: ${{ secrets.CLIENT_URL }}
+          PROJECT_ID: ${{ secrets.PROJECT_ID }}
         run: |
           python yugioh_goods_parser.py

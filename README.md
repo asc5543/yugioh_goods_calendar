@@ -23,18 +23,20 @@ In order to implement those functions, we need to
 We can get the source code of the website by using urlopen.
 The good information in source code of the Yugioh official website as the following:
 
-    p[1]={"id":"cg2010","status":"new","class-name":"コンセプトパック","class-key":"concept","type":"デッキビルドパック","title":"デッキビルドパック ジャスティス・ハンターズ","thumbnail":"package/nowprinting.png","price-intax":"176円","price-extax":" (本体価格 160円）","release-date":"2025年3月22日(土)","soon":"あと94日","limited":'none',"url":"","detail":"none"};
-    p[2]={"id":"cg2004","status":"","class-name":"スペシャルパック","class-key":"special","type":"25周年記念","title":"QUARTER CENTURY ART COLLECTION","thumbnail":"package/nowprinting.png","price-intax":"385円","price-extax":" (本体価格 350円）","release-date":"2025年2月22日(土)","soon":"あと66日","limited":'none',"url":"","detail":"none"};
-    p[3]={"id":"cg2002","status":"","class-name":"基本パック","class-key":"basic","type":"基本パック12","title":"ALLIANCE INSIGHT","thumbnail":"package/cg2002-pack.png","price-intax":"1パック 176円","price-extax":" (本体価格 160円）","release-date":"2025年1月25日(土)","soon":"あと38日","limited":'none',"url":"alin","detail":"page"};
+    p[1]={"id":"cg2087","status":"new","class-name":"スペシャルパック","class-key":"special","title":"LIMITED PACK GX -  ラーイエロー -","thumbnail":"package/cg2087.png","price-intax":"3,600円","price-extax":" (本体価格 3,273円）","release-date":"2026年7月下旬","soon":"none","limited":'konamistyle-satellite',"url":"#cg2087","detail":"modal"};
+	p[2]={"id":"cg2128","status":"new","class-name":"スペシャルパック","class-key":"special","title":"UTILITY SELECTION","thumbnail":"package/nowprinting.png","price-intax":"396円","price-extax":" (本体価格 360円）","release-date":"2026年8月8日(土)","soon":"あと105日","limited":'none',"url":"","detail":"none"};
+	p[3]={"id":"cg2119","status":"","class-name":"基本パック","class-key":"basic","title":"BEYOND THE BRAVE","thumbnail":"package/nowprinting.png","price-intax":"198円","price-extax":" (本体価格 180円）","release-date":"2026年7月18日(土)","soon":"あと84日","limited":'none',"url":"","detail":"none"};
+		
 
 From the above source code, we can know the format of good is an dict with the following items:
 * id
-* type
+* class-name
+* class-key
 * title
 * release-date
 * url
 
-#### Organize the same type pack
+#### Organize the same type pack (deprecated)
 The short names like 1201, AC03, WPP3, TW02 are more famous for mentioning those packs.
 In this parser, we would like to also implement it.
 Some types will show the short name on the url item, but the url won’t appear if the content of the url is not ready.

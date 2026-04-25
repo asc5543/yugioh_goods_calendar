@@ -9,3 +9,4 @@ raw_data
 config/__pycache__/config.cpython-312.pyc
 lib/__pycache__/google_calendar_handler.cpython-312.pyc
 lib/__pycache__/yugioh_good.cpython-312.pyc
+.env

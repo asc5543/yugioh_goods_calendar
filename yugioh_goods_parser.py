@@ -66,25 +66,43 @@ def find_card_list(goods_name: str) -> str | None:
                         print('No card list exists!')
                         return ""
                     print(f'No match for "{name}", trying next...')
+                    retry += 1
                     continue
 
                 for script_tag in script_tags:
                     script_content = script_tag.string.strip()
+                    
+                    # 1. 抓取標題
                     match_title = re.search(
                         r'"headline":\s*"([^"]+)"', script_content
                     )
+                    target_title = match_title.group(1) if match_title else ""
+                    print(f'Found title: {target_title}')
 
-                    if match_title:
-                        target_title = match_title.group(1)
-                        print(f'Found title: {target_title}')
-                        if name not in target_title and len(script_tags) > 1:
-                            continue
+                    # 2. 抓取文章內文/摘要 (Blogger 的 ld+json 通常有 articleBody)
+                    match_body = re.search(
+                        r'"articleBody":\s*"([^"]+)"', script_content
+                    )
+                    # 如果沒有 articleBody，改抓 description 作為備用
+                    if not match_body:
+                        match_body = re.search(
+                            r'"description":\s*"([^"]+)"', script_content
+                        )
+                    target_body = match_body.group(1) if match_body else ""
 
-                    match = re.search(r'"@id":\s*"([^"]+)"', script_content)
-                    if match:
-                        url = match.group(1)
-                        print(f'Card list URL: {url}')
-                        return url
+                    # 3. 檢查關鍵字是否在「標題」或「內文」中 (忽略大小寫比較安全)
+                    name_lower = name.lower()
+                    if (name_lower in target_title.lower()) or (name_lower in target_body.lower()):
+                        
+                        # 4. 條件符合，抓取並回傳 URL
+                        match_url = re.search(r'"@id":\s*"([^"]+)"', script_content)
+                        if match_url:
+                            url = match_url.group(1)
+                            print(f'Match found in content! Card list URL: {url}')
+                            return url
+
+                # 如果跑完所有文章的內文都沒找到，返回空字串
+                print(f'No full content match found for "{name}"')
                 return ""
 
             except HTTPError as e:

@@ -42,6 +42,7 @@ def normalize_name(value: str) -> str:
     value = unicodedata.normalize('NFKC', value).casefold()
     value = re.sub(r'[‐‑‒–—−－]', '-', value)
     value = re.sub(r'\s*-\s*', ' - ', value)
+    value = re.sub(r'\s*・\s*', '・', value)
     return re.sub(r'\s+', ' ', value).strip()
 
 
@@ -148,7 +149,14 @@ def _title_allows_body_check(title: str, names: list[str]) -> bool:
 
 def _body_matches_product(body: str, names: list[str]) -> bool:
     soup = BeautifulSoup(body, 'html.parser')
-    lines = soup.get_text('\n', strip=True).splitlines()
+    # Inline spans/fonts do not create new product headings. Preserve actual
+    # line/block boundaries while joining inline text in the same heading.
+    for br in soup.find_all('br'):
+        br.replace_with('\n')
+    for block in soup.find_all(['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4']):
+        block.insert_before('\n')
+        block.insert_after('\n')
+    lines = [line.strip() for line in soup.get_text(' ').splitlines() if line.strip()]
     return any(_matches_product(line, names) for line in lines[:10])
 
 
@@ -172,7 +180,7 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
         return CardListResult('not_found', reason='Empty product name')
     path = Path(cache_path or os.environ.get('CARD_LIST_CACHE', '.cache/card_lists.json'))
     cache = _read_search_cache(path)
-    key = json.dumps(['body-match-v2', *names], ensure_ascii=False)
+    key = json.dumps(['body-match-v3', *names], ensure_ascii=False)
     entry = cache.get(key, {})
     if not refresh and isinstance(entry, dict):
         expires = entry.get('expires', 0)

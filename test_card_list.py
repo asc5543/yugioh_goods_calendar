@@ -149,6 +149,26 @@ class SearchTests(unittest.TestCase):
             self.assertEqual(self.search('WORLD PREMIERE PACK 2026').status, 'error')
         self.assertFalse(self.cache.exists())
 
+    def test_rv02_entity_encoded_description(self):
+        name = 'REVOLUTION BOOSTER － 方界・マリンセス・ゴーストリック －'
+        body = '&#160; 2026/11/21 REVOLUTION BOOSTER&#65293;方界 &#12539; マリンセス &#12539; ゴーストリック&#65293;'
+        url = 'https://ntucgm.blogspot.com/2026/07/rv02-1121.html'
+        with patch.object(parser, '_fetch_card_page', return_value=page(
+                '[卡表資料] RV02收錄卡表 11/21發售', url, description=body)) as fetch:
+            result = self.search(name)
+        self.assertEqual((result.status, result.url), ('found', url))
+        self.assertEqual(fetch.call_count, 1)
+
+    def test_rv02_inline_heading_body_fallback(self):
+        name = 'REVOLUTION BOOSTER － 方界・マリンセス・ゴーストリック －'
+        body = '<div class="post-body"><p>2026/11/21 REVOLUTION BOOSTER－方界<span>・</span><b>マリンセス</b><span>・</span>ゴーストリック－</p><p>價格：264日圓</p></div>'
+        with patch.object(parser, '_fetch_card_page', side_effect=[
+            page('[卡表資料] RV02收錄卡表 11/21發售'), body
+        ]):
+            self.assertEqual(self.search(name).status, 'found')
+        other = body.replace('ゴーストリック', '別テーマ')
+        self.assertFalse(parser._body_matches_product(other, parser.card_list_queries(name)))
+
     def test_json_graph_escaped_title_and_html_fallback(self):
         node = {'@type': 'BlogPosting', 'headline': '[卡表資料] PACK "A"',
                 'mainEntityOfPage': {'@id': URL}, 'description': ''}

@@ -56,3 +56,39 @@ Uses google calendar API to parse existing events list.
 
 ### Parse chinese card list from NTUCGM
 Uses search function by good's name, parse the url from the result.
+
+### Card-list lookup and backfill
+
+`find_card_list()` returns a `CardListResult`, rather than a URL string:
+`status` is `found`, `not_found`, `error`, or `ambiguous`. Only `found`
+contains a verified `url`. Callers must check the status before updating links.
+The calendar sync preserves existing card-list links when lookup is unsuccessful.
+
+Search normalizes width, whitespace, case and dash characters, then tries the
+full name, the name without the known 遊☆戯☆王 prefix, and aliases configured in
+`config.CARD_LIST_ALIASES`. Years and variant suffixes are retained. Only card-list
+articles with an exact normalized product heading are accepted; uncertain
+matches are deliberately left unresolved. For generic card-list titles, the
+first ten body lines may supply that heading. This conservative rule may need
+explicit aliases for differently translated titles.
+
+Results are cached in `.cache/card_lists.json` (override with `CARD_LIST_CACHE`).
+Matches expire after 30 days and absence after 6 hours. Errors and ambiguous
+results are not cached. GitHub Actions restores and saves the file between runs.
+Set `refresh=True` to bypass cached results when calling the function directly.
+
+To sync one product even after its release date and bypass the lookup cache:
+
+```sh
+python yugioh_goods_parser.py --backfill-product '遊☆戯☆王 ORIGINAL ARTWORK COLLECTION'
+```
+
+This command writes to the configured Google Calendar and requires the same
+credentials as the regular sync. The product must still be present in the
+current official product listing. Other products are skipped.
+
+Run offline tests (no calendar writes):
+
+```sh
+python -m unittest -v
+```

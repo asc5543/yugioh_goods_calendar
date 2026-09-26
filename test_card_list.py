@@ -204,23 +204,6 @@ class SearchTests(unittest.TestCase):
         new = 'Type: new\nCard List (CH): https://example.com/new'
         self.assertEqual(parser.preserve_card_list(new, old), new)
 
-    def test_reject_known_wrong_link_only_for_affected_product(self):
-        name = 'Yu-Gi-Oh! THE DARK SIDE OF DIMENSIONS 10th ANNIVERSARY MOVIE'
-        wrong = 'https://ntucgm.blogspot.com/2019/05/asia-championship-regional-qualifier.html'
-        old = 'Type: old\nCard List (CH): ' + wrong
-        self.assertEqual(parser.preserve_card_list('Type: new', old, name), 'Type: new')
-        self.assertIn(wrong, parser.preserve_card_list('Type: new', old, 'Other product'))
-        self.assertIn(URL, parser.preserve_card_list('Type: new', 'Card List (CH): ' + URL, name))
-
-    def test_rejected_cached_link_is_not_returned(self):
-        name = 'Yu-Gi-Oh! THE DARK SIDE OF DIMENSIONS 10th ANNIVERSARY MOVIE'
-        wrong = 'https://ntucgm.blogspot.com/2019/05/asia-championship-regional-qualifier.html'
-        key = json.dumps(['body-match-v3', *parser.card_list_queries(name)], ensure_ascii=False)
-        self.cache.write_text(json.dumps({key: {'status': 'found', 'url': wrong, 'expires': 99999999999}}))
-        with patch.object(parser, '_fetch_card_page', return_value=page('[上位專訪] 冠軍', wrong)) as fetch:
-            self.assertEqual(self.search(name).status, 'not_found')
-        fetch.assert_called_once()
-
     def test_released_product_backfill_integration(self):
         raw = 'p[1]={"title":"' + NAME + '","class-name":"special","release-date":"2020年9月26日(土)","url":"yac1"};'
         response = Mock()

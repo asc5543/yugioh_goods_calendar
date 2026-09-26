@@ -116,6 +116,39 @@ class SearchTests(unittest.TestCase):
         ]):
             self.assertEqual(self.search().status, 'found')
 
+    def test_chinese_code_title_reads_body_despite_nonempty_summary(self):
+        title = '[卡表資料] 海外包 WPP7卡表 6/27發售'
+        with patch.object(parser, '_fetch_card_page', side_effect=[
+            page(title, description='卡片效果與收錄資訊'),
+            '<div class="post-body">2026/6/27 WORLD PREMIERE PACK 2026<br/>收錄資訊</div>'
+        ]) as fetch:
+            self.assertEqual(self.search('WORLD PREMIERE PACK 2026').status, 'found')
+        self.assertEqual(fetch.call_args.args[0], URL)
+
+    def test_conflicting_title_cannot_be_overridden_by_body(self):
+        for title in ['[卡表資料] PACK 2025', '[卡表資料] PACK 2026 - B',
+                      '[卡表資料] 海外包 2025', '[卡表資料] ANOTHER PACK']:
+            with self.subTest(title=title), patch.object(parser, '_fetch_card_page', return_value=page(
+                    title, articleBody='PACK 2026 - A')) as fetch:
+                self.assertEqual(self.search('PACK 2026 - A', refresh=True).status, 'not_found')
+                self.assertEqual(fetch.call_count, 1)
+
+    def test_body_requires_heading_not_incidental_mention(self):
+        for body in ['本商品與 WORLD PREMIERE PACK 2026 不同',
+                     'WORLD PREMIERE PACK 2025',
+                     '\n'.join(['其他內容'] * 10 + ['WORLD PREMIERE PACK 2026'])]:
+            with self.subTest(body=body), patch.object(parser, '_fetch_card_page', side_effect=[
+                page('[卡表資料] 海外包 WPP7卡表'), '<div class="post-body">' + body + '</div>'
+            ]):
+                self.assertEqual(self.search('WORLD PREMIERE PACK 2026', refresh=True).status, 'not_found')
+
+    def test_translated_title_body_fetch_failure_is_error(self):
+        with patch.object(parser, '_fetch_card_page', side_effect=[
+            page('[卡表資料] 海外包 WPP7卡表'), URLError('offline')
+        ]):
+            self.assertEqual(self.search('WORLD PREMIERE PACK 2026').status, 'error')
+        self.assertFalse(self.cache.exists())
+
     def test_json_graph_escaped_title_and_html_fallback(self):
         node = {'@type': 'BlogPosting', 'headline': '[卡表資料] PACK "A"',
                 'mainEntityOfPage': {'@id': URL}, 'description': ''}

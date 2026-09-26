@@ -131,6 +131,27 @@ def _matches_product(text: str, names: list[str]) -> bool:
     return text in names
 
 
+def _title_allows_body_check(title: str, names: list[str]) -> bool:
+    """Allow translated/code-only titles, but reject conflicting years/names."""
+    title = normalize_name(title).replace('[卡表資料]', '').strip()
+    title = re.sub(r'\s*\d{1,2}/\d{1,2}\s*(?:發售|発売).*$', '', title)
+    expected_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', ' '.join(names)))
+    title_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', title))
+    if expected_years and title_years and not title_years <= expected_years:
+        return False
+    # Codes such as WPP7/1303 are insufficient evidence either way. A spelled
+    # out Latin product name, however, must not be overridden by body mentions.
+    words = re.findall(r'(?<![a-z0-9])[a-z]{2,}(?![a-z0-9])', title)
+    name_words = set(re.findall(r'[a-z]{2,}', ' '.join(names)))
+    return len(words) < 2 and not name_words.intersection(words)
+
+
+def _body_matches_product(body: str, names: list[str]) -> bool:
+    soup = BeautifulSoup(body, 'html.parser')
+    lines = soup.get_text('\n', strip=True).splitlines()
+    return any(_matches_product(line, names) for line in lines[:10])
+
+
 def _read_search_cache(path: Path) -> dict:
     try:
         data = json.loads(path.read_text(encoding='utf-8'))
@@ -151,7 +172,7 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
         return CardListResult('not_found', reason='Empty product name')
     path = Path(cache_path or os.environ.get('CARD_LIST_CACHE', '.cache/card_lists.json'))
     cache = _read_search_cache(path)
-    key = json.dumps(names, ensure_ascii=False)
+    key = json.dumps(['body-match-v2', *names], ensure_ascii=False)
     entry = cache.get(key, {})
     if not refresh and isinstance(entry, dict):
         expires = entry.get('expires', 0)
@@ -182,22 +203,20 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
         if _matches_product(article['title'], names):
             matches.append(url)
             continue
-        # Only a generic card-list title may need body evidence. Do not override
-        # an explicit, conflicting product title using incidental body mentions.
-        title = normalize_name(article['title']).replace('[卡表資料]', '').strip()
-        if title:
+        if not _title_allows_body_check(article['title'], names):
             continue
-        body = article['body']
-        if not body:
-            try:
-                soup = BeautifulSoup(_fetch_card_page(url), 'html.parser')
-                node = soup.select_one('.post-body, .entry-content')
-                body = node.get_text('\n', strip=True) if node else ''
-            except (HTTPError, URLError, TimeoutError, OSError) as error:
-                errors.append(str(error))
-                continue
-        if any(_matches_product(line, names) for line in body.splitlines()[:10]):
+        # Search descriptions may be truncated or omit the product heading.
+        # Always fall back to the actual article when metadata is insufficient.
+        if _body_matches_product(article['body'], names):
             matches.append(url)
+            continue
+        try:
+            soup = BeautifulSoup(_fetch_card_page(url), 'html.parser')
+            node = soup.select_one('.post-body, .entry-content')
+            if node and _body_matches_product(str(node), names):
+                matches.append(url)
+        except (HTTPError, URLError, TimeoutError, OSError) as error:
+            errors.append(str(error))
 
     if len(matches) > 1:
         result = CardListResult('ambiguous', candidates=tuple(sorted(matches)), reason='Multiple matching articles')

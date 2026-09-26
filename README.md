@@ -68,8 +68,10 @@ Search normalizes width, whitespace, case and dash characters, then tries the
 full name, the name without the known 遊☆戯☆王 prefix, and aliases configured in
 `config.CARD_LIST_ALIASES`. Years and variant suffixes are retained. Only card-list
 articles with an exact normalized product heading are accepted; uncertain
-matches are deliberately left unresolved. For generic card-list titles, the
-first ten body lines may supply that heading. This conservative rule may need
+matches are deliberately left unresolved. For translated or code-only card-list titles, the first ten body lines may
+supply that heading. Explicit conflicting years or Latin product names are
+rejected before inspecting the body. If metadata is insufficient, the article
+body is fetched even when a nonempty description exists. This conservative rule may need
 explicit aliases for differently translated titles.
 
 Results are cached in `.cache/card_lists.json` (override with `CARD_LIST_CACHE`).

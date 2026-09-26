@@ -94,3 +94,8 @@ Run offline tests (no calendar writes):
 ```sh
 python -m unittest -v
 ```
+
+Confirmed historical mismatches can be listed in `CARD_LIST_REJECTED_URLS`,
+scoped to an exact official product name. These URLs are excluded from search
+and cached matches, and are not preserved from existing calendar descriptions.
+Other existing links remain protected on lookup failure.

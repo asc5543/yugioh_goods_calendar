@@ -65,6 +65,15 @@ def _article_url(value: str) -> str:
     return ''
 
 
+def rejected_card_list_urls(goods_name: str) -> set[str]:
+    rejected = getattr(config, 'CARD_LIST_REJECTED_URLS', {})
+    return {
+        _article_url(url) for name, urls in rejected.items()
+        if normalize_name(name) == normalize_name(goods_name)
+        for url in urls if _article_url(url)
+    }
+
+
 def _fetch_card_page(url: str) -> str:
     attempts = max(1, config.MAX_RETRY)
     for attempt in range(attempts):
@@ -176,6 +185,7 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
     results are never cached. Set refresh=True for explicit backfills.
     """
     names = card_list_queries(goods_name)
+    rejected = rejected_card_list_urls(goods_name)
     if not names:
         return CardListResult('not_found', reason='Empty product name')
     path = Path(cache_path or os.environ.get('CARD_LIST_CACHE', '.cache/card_lists.json'))
@@ -188,7 +198,7 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
             if entry.get('status') == 'not_found':
                 return CardListResult('not_found', reason='Cached absence')
             url = _article_url(entry.get('url', ''))
-            if entry.get('status') == 'found' and url:
+            if entry.get('status') == 'found' and url and url not in rejected:
                 return CardListResult('found', url, reason='Cached match')
 
     articles = {}
@@ -205,6 +215,8 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
 
     matches = []
     for url, article in articles.items():
+        if url in rejected:
+            continue
         # A deck guide mentioning the product is not a card list.
         if '[卡表資料]' not in normalize_name(article['title']):
             continue
@@ -249,11 +261,11 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
     return result
 
 
-def preserve_card_list(description: str, existing: str) -> str:
+def preserve_card_list(description: str, existing: str, goods_name: str = '') -> str:
     """A failed lookup must not remove an existing calendar link."""
     if not re.search(r'^Card List \(CH\):', description, re.M):
         previous = re.search(r'^Card List \(CH\):[^\r\n]+', existing, re.M)
-        if previous:
+        if previous and _article_url(previous.group(0).split(':', 1)[1].strip()) not in rejected_card_list_urls(goods_name):
             description += '\n' + previous.group(0)
     return description
 
@@ -378,7 +390,7 @@ def main(backfill_product: str | None = None):
                 if title in calendar_events:
                     print(f'Updating event: {title}')
                     existing = handler.get_calendar_event_by_summary(title)
-                    description = preserve_card_list(good.good_description, existing.get('description', ''))
+                    description = preserve_card_list(good.good_description, existing.get('description', ''), good.good_name)
                     handler.update_calendar_event(title, description)
                 else:
                     print(f'Creating event: {title}')

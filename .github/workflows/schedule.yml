@@ -25,6 +25,14 @@ jobs:
           pip install beautifulsoup4
           pip install python-dotenv
 
+      - name: Restore card-list cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/card_lists.json
+          key: card-lists-v1-${{ github.workflow }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            card-lists-v1-${{ github.workflow }}-
+
       - name: Run Yugioh Goods Parser
         env:
           CALENDAR_ID: ${{ secrets.CALENDAR_ID }}
@@ -35,3 +43,9 @@ jobs:
           CLIENT_URL: ${{ secrets.CLIENT_URL }}
         run: |
           python yugioh_goods_parser.py
+
+      - name: Save card-list cache
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/card_lists.json
+          key: card-lists-v1-${{ github.workflow }}-${{ github.run_id }}-${{ github.run_attempt }}

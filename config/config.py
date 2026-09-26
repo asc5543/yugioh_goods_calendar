@@ -6,3 +6,6 @@ TYPE_SHORTNAME_DICT = {
   "基本パック13": "13",
 }
 MAX_RETRY = 5
+
+# Exact official product name -> verified alternative product names.
+CARD_LIST_ALIASES = {}

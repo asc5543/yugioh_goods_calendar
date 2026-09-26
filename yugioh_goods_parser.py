@@ -295,7 +295,9 @@ def good_parse_good_str(good_str: str) -> yugioh_good.YugiohGoods | None:
 
 
 def get_good_title(good: yugioh_good.YugiohGoods) -> str:
-    """Get the full title including short name if available."""
+    """Label basic packs; preserve existing titles for other product types."""
+    if re.fullmatch(r"基本パック[0-9０-９]*", good.good_type.strip()):
+        return f'【基本補充包】{good.good_name}'
     if good.good_short_name:
         return f'[{good.good_short_name}] {good.good_name}'
     return good.good_name

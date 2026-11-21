@@ -177,20 +177,80 @@ class SearchTests(unittest.TestCase):
         html = '<script type="application/ld+json">bad</script><h3 class="post-title"><a href="' + URL + '">[卡表資料] PACK</a></h3>'
         self.assertEqual(parser._parse_card_articles(html)[0]['url'], URL)
 
-    @patch.object(parser.time, 'sleep')
-    def test_retry_transient_error_and_timeout(self, sleep):
+    def mock_card_site(self, *responses):
+        clock = [100.0]
+        request_times = []
+
+        def open_page(*args, **kwargs):
+            request_times.append(clock[0])
+            response = next(pending)
+            if isinstance(response, Exception):
+                raise response
+            return response
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        pending = iter(responses)
+        for target, key, options in [
+            (parser, '_card_site_next_request', {'new': 0.0}),
+            (parser, '_card_site_cooldown_until', {'new': 0.0}),
+            (parser.time, 'monotonic', {'side_effect': lambda: clock[0]}),
+            (parser.time, 'sleep', {'side_effect': sleep}),
+            (parser.random, 'uniform', {'return_value': 0.5}),
+        ]:
+            patcher = patch.object(target, key, **options)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        patcher = patch.object(parser, 'urlopen', side_effect=open_page)
+        fetch = patcher.start()
+        self.addCleanup(patcher.stop)
+        return fetch, request_times, clock
+
+    def test_retry_after_and_global_spacing(self):
         response = Mock()
         response.__enter__ = Mock(return_value=response)
         response.__exit__ = Mock(return_value=False)
         response.read.return_value = b'ok'
-        with patch.object(parser, 'urlopen', side_effect=[HTTPError(URL, 429, 'limited', {'Retry-After': '2'}, None), response]) as fetch:
-            self.assertEqual(parser._fetch_card_page(URL), 'ok')
-            self.assertEqual(fetch.call_count, 2)
-            self.assertEqual(fetch.call_args.kwargs['timeout'], 20)
-        with patch.object(parser, 'urlopen', side_effect=HTTPError(URL, 404, 'missing', {}, None)) as fetch:
-            with self.assertRaises(HTTPError):
+        fetch, times, _ = self.mock_card_site(
+            HTTPError(URL, 429, 'limited', {'Retry-After': '20'}, None),
+            response, response, HTTPError(URL, 404, 'missing', {}, None),
+        )
+        self.assertEqual(parser._fetch_card_page(URL), 'ok')
+        self.assertEqual(parser._fetch_card_page('https://ntucgm.blogspot.com/search?q=pack'), 'ok')
+        with self.assertRaises(HTTPError):
+            parser._fetch_card_page(URL)
+        self.assertEqual(times, [100, 120.5, 122.5, 124.5])
+        self.assertTrue(all(call.kwargs['timeout'] == 20 for call in fetch.call_args_list))
+
+    def test_repeated_429_skips_remaining_aliases_products_and_articles(self):
+        errors = [HTTPError(URL, 429, 'limited', {}, None) for _ in range(2)]
+        _, times, _ = self.mock_card_site(*errors)
+        self.assertEqual(self.search().status, 'error')
+        self.assertEqual(self.search('Another product').status, 'error')
+        with self.assertRaises(parser.CardSiteRateLimited):
+            parser._fetch_card_page(URL)
+        self.assertEqual(times, [100, 115.5])
+        self.assertFalse(self.cache.exists())
+
+    def test_http_date_retry_after_beyond_wait_budget_resumes_after_deadline(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = b'ok'
+        _, times, clock = self.mock_card_site(
+            HTTPError(URL, 429, 'limited', {'Retry-After': 'Thu, 01 Jan 1970 00:16:40 GMT'}, None),
+            response,
+        )
+        with patch.object(parser.time, 'time', return_value=100):
+            with self.assertRaises(parser.CardSiteRateLimited):
                 parser._fetch_card_page(URL)
-            self.assertEqual(fetch.call_count, 1)
+        clock[0] = 1000
+        with self.assertRaises(parser.CardSiteRateLimited):
+            parser._fetch_card_page(URL)
+        clock[0] = 1001
+        self.assertEqual(parser._fetch_card_page(URL), 'ok')
+        self.assertEqual(times, [100, 1001])
 
     def test_preserve_existing_link_for_all_unsuccessful_statuses(self):
         old = 'Type: old\nCard List (CH): ' + URL

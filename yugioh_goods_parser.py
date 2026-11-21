@@ -2,8 +2,11 @@ import argparse
 import ast
 import json
 import logging
+import random
+import threading
 import unicodedata
 from dataclasses import dataclass
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 import datetime
 import os
@@ -65,25 +68,72 @@ def _article_url(value: str) -> str:
     return ''
 
 
+class CardSiteRateLimited(URLError):
+    """The card-list source is cooling down after HTTP 429."""
+
+
+_card_site_lock = threading.Lock()
+_card_site_next_request = 0.0
+_card_site_cooldown_until = 0.0
+_CARD_SITE_REQUEST_INTERVAL = 2
+_CARD_SITE_MAX_RETRY_WAIT = 30
+_CARD_SITE_COOLDOWN = 300
+
+
+def _retry_after_seconds(error: HTTPError) -> float:
+    value = error.headers.get('Retry-After', '').strip() if error.headers else ''
+    try:
+        if re.fullmatch(r'[0-9]+', value):
+            return float(value)
+        date = parsedate_to_datetime(value)
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=datetime.timezone.utc)
+        return max(0, date.timestamp() - time.time())
+    except (ValueError, TypeError, OverflowError):
+        return 0
+
+
 def _fetch_card_page(url: str) -> str:
+    global _card_site_next_request, _card_site_cooldown_until
     attempts = max(1, config.MAX_RETRY)
-    for attempt in range(attempts):
-        try:
-            time.sleep(1)
-            with urlopen(Request(url, headers={'User-Agent': 'Mozilla/5.0'}), timeout=20) as response:
-                return response.read().decode('utf-8')
-        except (HTTPError, URLError, TimeoutError, OSError) as error:
-            transient = not isinstance(error, HTTPError) or error.code in (408, 429, 500, 502, 503, 504)
-            if not transient or attempt == attempts - 1:
-                raise
-            delay = min(2 ** (attempt + 1), 30)
-            if isinstance(error, HTTPError):
-                retry_after = error.headers.get('Retry-After', '') if error.headers else ''
-                if retry_after.isdigit():
-                    delay = min(int(retry_after), 60)
-            logger.warning('Retrying %s after %s: %ss', url, error, delay)
-            time.sleep(delay)
-    raise RuntimeError('No fetch attempt made')
+    rate_limited = False
+    # Keep the retry and cooldown decisions shared by search and article URLs.
+    with _card_site_lock:
+        if time.monotonic() < _card_site_cooldown_until:
+            raise CardSiteRateLimited('Card-list site cooling down after HTTP 429')
+        for attempt in range(attempts):
+            wait = _card_site_next_request - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            _card_site_next_request = time.monotonic() + _CARD_SITE_REQUEST_INTERVAL
+            try:
+                with urlopen(Request(url, headers={
+                    'User-Agent': 'YugiohGoodsCalendar/1.0 (+https://github.com/asc5543/yugioh_goods_calendar)',
+                    'Accept': 'text/html,application/xhtml+xml',
+                }), timeout=20) as response:
+                    return response.read().decode('utf-8')
+            except (HTTPError, URLError, TimeoutError, OSError) as error:
+                status = error.code if isinstance(error, HTTPError) else None
+                if isinstance(error, HTTPError):
+                    error.close()
+                if status not in (None, 408, 429, 500, 502, 503, 504):
+                    raise
+                delay = min(2 ** (attempt + 1), 30)
+                retry_after = _retry_after_seconds(error) if status in (429, 503) else 0
+                if status == 429:
+                    delay = max(delay, 15)
+                delay = max(delay, retry_after) + random.uniform(0, 1)
+                if status == 429 and (rate_limited or attempt == attempts - 1
+                                      or delay > _CARD_SITE_MAX_RETRY_WAIT):
+                    cooldown = max(_CARD_SITE_COOLDOWN, delay)
+                    _card_site_cooldown_until = time.monotonic() + cooldown
+                    logger.warning('Pausing card-list requests for at least %.0fs after HTTP 429', cooldown)
+                    raise CardSiteRateLimited('Card-list site returned HTTP 429') from error
+                if delay > _CARD_SITE_MAX_RETRY_WAIT or attempt == attempts - 1:
+                    raise
+                rate_limited = rate_limited or status == 429
+                _card_site_next_request = max(_card_site_next_request, time.monotonic() + delay)
+                logger.warning('Retrying %s after %s in %.1fs', url, error, delay)
 
 
 def _parse_card_articles(html: str) -> list[dict]:
@@ -199,6 +249,8 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
         try:
             for article in _parse_card_articles(_fetch_card_page(url)):
                 articles.setdefault(article['url'], article)
+        except CardSiteRateLimited as error:
+            return CardListResult('error', reason=str(error))
         except (HTTPError, URLError, TimeoutError, OSError) as error:
             errors.append(str(error))
             logger.warning('Search failed for %s: %s', name, error)
@@ -223,6 +275,8 @@ def find_card_list(goods_name: str, *, refresh: bool = False,
             node = soup.select_one('.post-body, .entry-content')
             if node and _body_matches_product(str(node), names):
                 matches.append(url)
+        except CardSiteRateLimited as error:
+            return CardListResult('error', reason=str(error))
         except (HTTPError, URLError, TimeoutError, OSError) as error:
             errors.append(str(error))
 

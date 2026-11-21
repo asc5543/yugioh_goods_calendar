@@ -74,7 +74,10 @@ rejected before inspecting the body. If metadata is insufficient, the article
 body is fetched even when a nonempty description exists. This conservative rule may need
 explicit aliases for differently translated titles.
 
-Results are cached in `.cache/card_lists.json` (override with `CARD_LIST_CACHE`).
+Verified article URLs in `config.CARD_LIST_URLS` take priority over search and
+cache, including during backfills.
+
+Search results are cached in `.cache/card_lists.json` (override with `CARD_LIST_CACHE`).
 Matches expire after 30 days and absence after 6 hours. Errors and ambiguous
 results are not cached. GitHub Actions restores and saves the file between runs.
 Set `refresh=True` to bypass cached results when calling the function directly.

@@ -28,6 +28,31 @@ class SearchTests(unittest.TestCase):
     def search(self, name=NAME, **kwargs):
         return parser.find_card_list(name, cache_path=self.cache, **kwargs)
 
+    def test_verified_urls_take_priority_over_cache_and_search(self):
+        products = {
+            'Yu-Gi-Oh! THE DARK SIDE OF DIMENSIONS 10th ANNIVERSARY MOVIE BOX':
+                'https://ntucgm.blogspot.com/2026/10/10-1219.html',
+            'THE CHRONICLES DECK DX マギストス':
+                'https://ntucgm.blogspot.com/2026/07/chronicles-deck-dx-125.html',
+        }
+        self.cache.write_text(json.dumps({
+            json.dumps(['body-match-v3', *parser.card_list_queries(name)], ensure_ascii=False):
+                {'status': 'not_found', 'expires': 99_999_999_999}
+            for name in products
+        }))
+        with patch.object(parser, '_fetch_card_page') as fetch:
+            for name, url in products.items():
+                for refresh in (False, True):
+                    with self.subTest(name=name, refresh=refresh):
+                        result = self.search(name.lower(), refresh=refresh)
+                        self.assertEqual((result.status, result.url), ('found', url))
+            fetch.assert_not_called()
+
+    def test_verified_url_does_not_match_another_deck(self):
+        with patch.object(parser, '_fetch_card_page', return_value='') as fetch:
+            self.assertEqual(self.search('THE CHRONICLES DECK DX － 別テーマ').status, 'not_found')
+            fetch.assert_called_once()
+
     def test_original_artwork_fixture_and_next_candidate(self):
         fixture = Path('tests/fixtures/original_artwork_search.html').read_text()
         with patch.object(parser, '_fetch_card_page', side_effect=['<html/>', fixture]) as fetch:

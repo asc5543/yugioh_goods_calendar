@@ -220,11 +220,18 @@ def _read_search_cache(path: Path) -> dict:
 
 def find_card_list(goods_name: str, *, refresh: bool = False,
                    cache_path: str | Path | None = None) -> CardListResult:
-    """Search all precise aliases; do not confuse absence with fetch failure.
+    """Use verified URLs first, then search all precise aliases.
 
     Success is cached for 30 days, absence for 6 hours. Errors and ambiguous
     results are never cached. Set refresh=True for explicit backfills.
     """
+    product_name = normalize_name(goods_name)
+    for configured_name, configured_url in config.CARD_LIST_URLS.items():
+        if normalize_name(configured_name) == product_name:
+            url = _article_url(configured_url)
+            if url:
+                return CardListResult('found', url, reason='Verified product URL')
+
     names = card_list_queries(goods_name)
     if not names:
         return CardListResult('not_found', reason='Empty product name')
